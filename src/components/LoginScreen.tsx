@@ -3,7 +3,7 @@ import { ArrowRight, KeyRound, Mail, RefreshCw } from 'lucide-react';
 import { motion } from 'motion/react';
 import { BrandLogo } from './BrandLogo';
 import { useToast } from './ToastProvider';
-import { supabase } from '../lib/supabase';
+import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from '../lib/supabase';
 import {
   linkAccountAndResolveSession,
   parseWhatsAppInvokeResult,
@@ -36,6 +36,39 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
+  const [keyCheckStatus, setKeyCheckStatus] = useState('checking...');
+
+  const supabaseHost = (() => {
+    try {
+      return new URL(SUPABASE_URL).host;
+    } catch {
+      return SUPABASE_URL;
+    }
+  })();
+
+  const diagnosticsPrefix = `Config: ${supabaseHost} | key starts: ${SUPABASE_ANON_KEY.slice(0, 12)} | length: ${SUPABASE_ANON_KEY.length}`;
+
+  useEffect(() => {
+    let active = true;
+    const checkKey = async () => {
+      let status = 'FAILED';
+      try {
+        const res = await fetch(`${SUPABASE_URL}/auth/v1/settings`, {
+          headers: { apikey: SUPABASE_ANON_KEY },
+        });
+        status = res.ok ? 'OK' : `FAILED ${res.status}`;
+      } catch {
+        status = 'FAILED network';
+      }
+      if (!active) return;
+      setKeyCheckStatus(status);
+      console.log(`${diagnosticsPrefix} | key check: ${status}`);
+    };
+    void checkKey();
+    return () => {
+      active = false;
+    };
+  }, [diagnosticsPrefix]);
 
   useEffect(() => {
     if (cooldownSeconds <= 0) return;
@@ -332,6 +365,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           )}
         </motion.div>
       </main>
+
+      <footer className="px-4 py-3 text-center">
+        <p className="text-[11px] text-slate-400 font-mono break-all">
+          {`${diagnosticsPrefix} | key check: ${keyCheckStatus}`}
+        </p>
+      </footer>
     </div>
   );
 };
